@@ -87,6 +87,15 @@ Press <kbd>v</kbd> to approve the PR. When you do, the dashboard uses the
 `gh pr review --approve` command to approve the PR. This will prompt you to add an optional comment to the approval. The comment prompt will be prefilled with
 `defaults.prApproveComment` if it is set in your configuration, which defaults to "LGTM".
 
+Set `defaults.prQuickApprove: true` to skip the prompt and approve immediately with
+`defaults.prApproveComment` as the comment. With `defaults.prQuickApproveAdvance: true` the
+selection also moves to the next PR after approving. See [Defaults][defaults] for details.
+
+After approving (or any other action that changes a PR), the PR is re-fetched from GitHub so the
+table and preview reflect its current state.
+
+[defaults]: /configuration/defaults/#quick-approve-prquickapprove
+
 ## `w` - Watch PR checks
 
 Press <kbd>w</kbd> to watch the PR check and get a desktop notification if they succeed or fail. When you do, the dashboard uses the

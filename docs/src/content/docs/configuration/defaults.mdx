@@ -12,6 +12,8 @@ defaults:
   issuesLimit: 20
   notificationsLimit: 20
   prApproveComment: LGTM
+  prQuickApprove: false
+  prQuickApproveAdvance: false
   preview:
     open: true
     width: 0.45
@@ -249,6 +251,30 @@ This can be set as an empty string to not prefill a comment.
 By default, the comment is "LGTM".
 
 [approving a PR]: /getting-started/keybindings/selected-pr/#v---approve-pr
+
+### Quick Approve (`prQuickApprove`)
+
+| Type    | Default |
+| :------ | :-----: |
+| Boolean |  false  |
+
+When enabled, approving a PR submits the approval immediately with
+`prApproveComment` as the review body instead of opening the comment prompt.
+Set `prApproveComment` to an empty string to approve without a comment.
+
+The PR is re-fetched right after the approval (as after any other PR action),
+so the review status in the table and the sidebar update without waiting for
+the next refetch interval.
+
+### Advance After Quick Approve (`prQuickApproveAdvance`)
+
+| Type    | Default |
+| :------ | :-----: |
+| Boolean |  false  |
+
+Only applies when `prQuickApprove` is enabled. After approving, the selection
+moves to the next PR in the section so you can review a queue of PRs by
+pressing the approve key repeatedly. On the last row the selection stays put.
 
 ## Confirm Quit (`confirmQuit`)
 

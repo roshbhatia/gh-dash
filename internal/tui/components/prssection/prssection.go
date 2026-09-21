@@ -275,6 +275,56 @@ func (m *Model) EnrichPR(data data.EnrichedPullRequestData) {
 	}
 }
 
+// RefreshPR replaces the row's enriched data and the primary fields that the
+// single-PR query also returns, so the table and sidebar reflect the PR's
+// current state after an action (approve, merge, label, ...). Fields only the
+// search query provides (comment counts, CI rollup, merge queue) are kept.
+// Rows are matched by URL. Returns whether a row was updated.
+func (m *Model) RefreshPR(enriched data.EnrichedPullRequestData) bool {
+	updated := false
+	for i := range m.Prs {
+		primary := m.Prs[i].Primary
+		if primary == nil || primary.Url != enriched.Url {
+			continue
+		}
+
+		fresh := enriched.ToPullRequestData()
+		primary.Title = fresh.Title
+		primary.State = fresh.State
+		primary.IsDraft = fresh.IsDraft
+		primary.Mergeable = fresh.Mergeable
+		primary.ReviewDecision = fresh.ReviewDecision
+		primary.UpdatedAt = fresh.UpdatedAt
+		primary.Additions = fresh.Additions
+		primary.Deletions = fresh.Deletions
+		primary.HeadRefName = fresh.HeadRefName
+		primary.BaseRefName = fresh.BaseRefName
+		primary.Labels = fresh.Labels
+		primary.Assignees = fresh.Assignees
+		primary.Comments.TotalCount = int(enriched.Comments.TotalCount)
+		primary.Reviews.TotalCount = enriched.Reviews.TotalCount
+		primary.ReviewRequests.TotalCount = enriched.ReviewRequests.TotalCount
+
+		m.Prs[i].Enriched = enriched
+		m.Prs[i].IsEnriched = true
+		updated = true
+	}
+	if updated {
+		m.Table.SetRows(m.BuildRows())
+	}
+	return updated
+}
+
+// PrUrlByNumber returns the URL of the first row with the given PR number.
+func (m *Model) PrUrlByNumber(number int) (string, bool) {
+	for _, pr := range m.Prs {
+		if pr.Primary != nil && pr.Primary.Number == number {
+			return pr.Primary.Url, true
+		}
+	}
+	return "", false
+}
+
 func GetSectionColumns(
 	cfg config.PrsSectionConfig,
 	ctx *context.ProgramContext,

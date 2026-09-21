@@ -187,6 +187,8 @@ type Defaults struct {
 	Preview                PreviewConfig `yaml:"preview"`
 	PrsLimit               int           `yaml:"prsLimit"`
 	PrApproveComment       string        `yaml:"prApproveComment,omitempty"`
+	PrQuickApprove         bool          `yaml:"prQuickApprove,omitempty"`
+	PrQuickApproveAdvance  bool          `yaml:"prQuickApproveAdvance,omitempty"`
 	IssuesLimit            int           `yaml:"issuesLimit"`
 	NotificationsLimit     int           `yaml:"notificationsLimit"`
 	View                   ViewType      `yaml:"view"`
