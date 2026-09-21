@@ -142,3 +142,17 @@ func (m *Model) View() string {
 func (m *Model) UpdateProgramContext(ctx *context.ProgramContext) {
 	m.ctx = *ctx
 }
+
+func (m *Model) SelectVisibleRow(y int) bool {
+	if y < 0 || y >= m.viewport.Height() || m.ListItemHeight <= 0 {
+		return false
+	}
+	row := (m.viewport.YOffset() + y) / m.ListItemHeight
+	if row >= m.NumCurrentItems {
+		return false
+	}
+	m.currId = row
+	m.topBoundId = m.viewport.YOffset() / m.ListItemHeight
+	m.bottomBoundId = m.topBoundId + max(1, m.getNumPrsPerPage()) - 1
+	return true
+}

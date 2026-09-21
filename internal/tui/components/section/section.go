@@ -173,6 +173,7 @@ type Table interface {
 	NumRows() int
 	GetCurrRow() data.RowData
 	CurrRow() int
+	SelectVisibleRow(y int) bool
 	NextRow() int
 	PrevRow() int
 	FirstItem() int
@@ -565,3 +566,5 @@ func ToImplSections[T Section](sections []Section) []T {
 
 	return res
 }
+
+func (m *BaseModel) SelectVisibleRow(y int) bool { return m.Table.SelectVisibleRow(y) }

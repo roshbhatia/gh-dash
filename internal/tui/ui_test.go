@@ -2252,3 +2252,86 @@ func TestNotificationCommandTemplateVariables(t *testing.T) {
 		})
 	}
 }
+
+func TestTopPreviewMouseNavigation(t *testing.T) {
+	zone.NewGlobal()
+	zone.SetEnabled(true)
+	cfg, err := config.ParseConfig(config.Location{
+		ConfigFlag:       "../config/testdata/test-config.yml",
+		SkipGlobalConfig: true,
+	})
+	require.NoError(t, err)
+	cfg.Defaults.Preview.Width = 0.45
+	cfg.Defaults.Preview.Height = 0.75
+	cfg.Defaults.Preview.Position = "top"
+
+	ctx := &context.ProgramContext{
+		Config:       &cfg,
+		ScreenWidth:  100,
+		ScreenHeight: 40,
+		View:         config.PRsView,
+		StartTask:    func(task context.Task) tea.Cmd { return nil },
+	}
+	ctx.Theme = theme.ParseTheme(ctx.Config)
+	ctx.Styles = context.InitStyles(ctx.Theme)
+
+	prSection := prssection.NewModel(
+		0,
+		ctx,
+		config.PrsSectionConfig{
+			Title:   "Test",
+			Filters: "is:open",
+		},
+		time.Now(),
+		time.Now(),
+	)
+
+	m := Model{
+		ctx:              ctx,
+		keys:             keys.Keys,
+		prs:              []section.Section{&prSection},
+		sidebar:          sidebar.NewModel(),
+		footer:           footer.NewModel(ctx),
+		tabs:             tabs.NewModel(ctx),
+		prView:           prview.NewModel(ctx),
+		issueSidebar:     issueview.NewModel(ctx),
+		branchSidebar:    branchsidebar.NewModel(ctx),
+		notificationView: notificationview.NewModel(ctx),
+	}
+
+	cfg.Theme.Ui.Table.Compact = true
+	cfg.Theme.Ui.Table.ShowSeparator = false
+	// Rebuild the section so row heights reflect the compact configuration.
+	prSection = prssection.NewModel(0, ctx, config.PrsSectionConfig{Title: "Test", Filters: "is:open"}, time.Now(), time.Now())
+	for i := range 8 {
+		prSection.Prs = append(prSection.Prs, prrow.Data{Primary: &data.PullRequestData{Number: i + 1, Title: "Test PR", Url: "https://github.com/test/repo/pull/1"}})
+	}
+	prSection.Table.SetRows(prSection.BuildRows())
+	m.sidebar.IsOpen = true
+	m.syncMainContentDimensions()
+	m.syncProgramContext()
+	m.sidebar.SetContent(strings.Repeat("Preview content\n", 100))
+	view := m.View()
+	require.Equal(t, tea.MouseModeCellMotion, view.MouseMode)
+	require.Greater(t, m.ctx.DynamicPreviewHeight, m.ctx.MainContentHeight)
+	require.LessOrEqual(t, strings.Count(view.Content, "\n")+1, ctx.ScreenHeight)
+	require.Eventually(t, func() bool { return !zone.Get("preview").IsZero() && !zone.Get("table-body").IsZero() }, time.Second, time.Millisecond)
+	preview, body := zone.Get("preview"), zone.Get("table-body")
+	require.Less(t, preview.EndY, body.StartY)
+	m.Update(tea.MouseWheelMsg{X: preview.StartX + 1, Y: preview.StartY + 1, Button: tea.MouseWheelDown})
+	require.Greater(t, m.sidebar.YOffset(), 0)
+	require.Equal(t, 0, prSection.CurrRow())
+	m.Update(tea.MouseClickMsg{X: body.StartX + 1, Y: body.StartY + 1, Button: tea.MouseLeft})
+	require.Equal(t, 1, prSection.CurrRow())
+	m.Update(tea.MouseWheelMsg{X: body.StartX + 1, Y: body.StartY + 1, Button: tea.MouseWheelDown})
+	require.Equal(t, 2, prSection.CurrRow())
+	prSection.SetIsSearching(true)
+	m.Update(tea.MouseClickMsg{X: body.StartX + 1, Y: body.StartY, Button: tea.MouseLeft})
+	require.Equal(t, 2, prSection.CurrRow())
+	for _, height := range []int{20, 10, 4} {
+		ctx.ScreenHeight = height
+		m.syncMainContentDimensions()
+		require.GreaterOrEqual(t, ctx.DynamicPreviewHeight, 0)
+		require.GreaterOrEqual(t, ctx.MainContentHeight, 0)
+	}
+}

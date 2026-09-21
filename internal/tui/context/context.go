@@ -8,6 +8,7 @@ import (
 	gitm "github.com/aymanbagabas/git-module"
 	"github.com/cli/go-gh/v2/pkg/repository"
 	"github.com/dlvhdr/gh-dash/v4/internal/config"
+	"github.com/dlvhdr/gh-dash/v4/internal/tui/common"
 	"github.com/dlvhdr/gh-dash/v4/internal/tui/theme"
 	"github.com/dlvhdr/gh-dash/v4/internal/utils"
 )
@@ -41,8 +42,8 @@ type ProgramContext struct {
 	MainContentWidth     int
 	MainContentHeight    int
 	DynamicPreviewWidth  int
-	DynamicPreviewHeight int    // calculated preview height for bottom mode
-	PreviewPosition      string // resolved "right" or "bottom"
+	DynamicPreviewHeight int
+	PreviewPosition      string
 	SidebarOpen          bool
 	HasDarkBackground    bool
 	BackgroundSource     string
@@ -89,6 +90,9 @@ func (ctx *ProgramContext) GetViewSectionsConfig() []config.SectionConfig {
 }
 
 func (ctx *ProgramContext) PreviewCursorPosition() tea.Position {
+	if ctx.PreviewPosition == "top" {
+		return tea.Position{X: 0, Y: common.TabsHeight}
+	}
 	if ctx.PreviewPosition == "right" {
 		return tea.Position{
 			X: ctx.MainContentWidth,

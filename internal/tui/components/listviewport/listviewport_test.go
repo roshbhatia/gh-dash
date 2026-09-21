@@ -1,6 +1,7 @@
 package listviewport
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -127,5 +128,22 @@ func TestNextItemAtLastItem(t *testing.T) {
 
 	if m.GetCurrItem() != 9 {
 		t.Errorf("expected currId=9, got %d", m.GetCurrItem())
+	}
+}
+
+func TestSelectVisibleRowAfterScroll(t *testing.T) {
+	for _, itemHeight := range []int{1, 2, 3} {
+		m := newTestModel(testModelOpts{numItems: 20, viewportHeight: 6, itemHeight: itemHeight})
+		m.SyncViewPort(strings.Repeat("row\n", 20*itemHeight))
+		for range 7 {
+			m.NextItem()
+		}
+		expected := m.viewport.YOffset() / itemHeight
+		if !m.SelectVisibleRow(0) || m.GetCurrItem() != expected {
+			t.Fatalf("wrong selected row for item height %d", itemHeight)
+		}
+		if m.SelectVisibleRow(-1) || m.SelectVisibleRow(6) {
+			t.Fatal("selected outside viewport")
+		}
 	}
 }

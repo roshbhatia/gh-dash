@@ -9,6 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+	zone "github.com/lrstanley/bubblezone/v2"
 
 	"github.com/dlvhdr/gh-dash/v4/internal/tui/common"
 	"github.com/dlvhdr/gh-dash/v4/internal/tui/components/listviewport"
@@ -302,7 +303,7 @@ func (m *Model) renderBody() string {
 		return bodyStyle.Render(*m.EmptyState)
 	}
 
-	return m.rowsViewport.View()
+	return zone.Mark("table-body", m.rowsViewport.View())
 }
 
 func (m *Model) renderRow(rowId int, headerColumns []string) string {
@@ -402,4 +403,12 @@ func (m *Model) UpdateTotalItemsCount(count int) {
 
 func (m *Model) IsLoading() bool {
 	return m.isLoading
+}
+
+func (m *Model) SelectVisibleRow(y int) bool {
+	if m.isLoading || !m.rowsViewport.SelectVisibleRow(y) {
+		return false
+	}
+	m.SyncViewPortContent()
+	return true
 }

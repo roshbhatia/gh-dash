@@ -67,7 +67,7 @@ type Model struct {
 	ctx              *context.ProgramContext
 	taskSpinner      spinner.Model
 	tasks            map[string]context.Task
-	positionOverride string // "" means no override, "right" or "bottom"
+	positionOverride string
 	mode             Mode
 	// initialPr, when set, opens this PR in a pinned section on startup.
 	initialPr *InitialPR
@@ -340,6 +340,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.sidebar.IsOpen {
 				if m.ctx.PreviewPosition == "right" {
 					m.positionOverride = "bottom"
+				} else if m.ctx.PreviewPosition == "bottom" && m.ctx.Config.Defaults.Preview.Position == "top" {
+					m.positionOverride = "top"
 				} else {
 					m.positionOverride = "right"
 				}
@@ -923,9 +925,47 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, currSection.FetchNextPageSectionRows()...)
 		}
 
+	case tea.MouseWheelMsg:
+		if msg.Button != tea.MouseWheelUp && msg.Button != tea.MouseWheelDown {
+			return m, nil
+		}
+		if m.sidebar.IsOpen && zone.Get("preview").InBounds(msg) {
+			lines := 3
+			if msg.Button == tea.MouseWheelUp {
+				lines = -3
+			}
+			m.sidebar.ScrollLines(lines)
+			return m, nil
+		}
+		if currSection != nil && zone.Get("table-body").InBounds(msg) && !m.mouseNavigationBlocked() {
+			if msg.Button == tea.MouseWheelUp {
+				if currSection.CurrRow() <= 0 {
+					return m, nil
+				}
+				currSection.PrevRow()
+			} else {
+				if currSection.CurrRow() >= currSection.NumRows()-1 {
+					return m, nil
+				}
+				currSection.NextRow()
+			}
+			cmds = append(cmds, m.onViewedRowChanged())
+			if currSection.CurrRow() == currSection.NumRows()-1 {
+				cmds = append(cmds, currSection.FetchNextPageSectionRows()...)
+			}
+		}
+
 	case tea.MouseClickMsg:
 		if msg.Button != tea.MouseLeft {
 			return m, nil
+		}
+		if currSection != nil && !m.mouseNavigationBlocked() {
+			if body := zone.Get("table-body"); body.InBounds(msg) {
+				_, y := body.Pos(msg)
+				if currSection.SelectVisibleRow(y) {
+					cmds = append(cmds, m.onViewedRowChanged())
+				}
+			}
 		}
 		if zone.Get("donate").InBounds(msg) {
 			log.Info("Donate clicked", "msg", msg)
@@ -1036,17 +1076,19 @@ func (m *Model) View() tea.View {
 	var content string
 	currSection := m.getCurrSection()
 	if currSection != nil {
-		if m.ctx.PreviewPosition == "bottom" && m.sidebar.IsOpen {
+		if m.ctx.PreviewPosition == "top" && m.sidebar.IsOpen {
+			content = lipgloss.JoinVertical(lipgloss.Left, zone.Mark("preview", m.sidebar.View()), m.getCurrSection().View())
+		} else if m.ctx.PreviewPosition == "bottom" && m.sidebar.IsOpen {
 			content = lipgloss.JoinVertical(
 				lipgloss.Left,
 				m.getCurrSection().View(),
-				m.sidebar.View(),
+				zone.Mark("preview", m.sidebar.View()),
 			)
 		} else {
 			content = lipgloss.JoinHorizontal(
 				lipgloss.Top,
 				m.getCurrSection().View(),
-				m.sidebar.View(),
+				zone.Mark("preview", m.sidebar.View()),
 			)
 		}
 	} else {
@@ -1083,6 +1125,9 @@ func (m *Model) View() tea.View {
 		searchCmp := currSection.ViewCompletions()
 		if searchCmp != "" {
 			y := common.HeaderHeight + common.SearchHeight + 1
+			if m.sidebar.IsOpen && m.ctx.PreviewPosition == "top" {
+				y += m.ctx.DynamicPreviewHeight + m.ctx.Styles.Sidebar.BorderWidth
+			}
 			layers = append(layers, lipgloss.NewLayer(searchCmp).X(1).Y(y))
 		}
 	}
@@ -1091,12 +1136,18 @@ func (m *Model) View() tea.View {
 	previewPos := m.ctx.PreviewCursorPosition()
 	if prCmp != "" {
 		y := m.ctx.ScreenHeight - common.FooterHeight - m.prView.InputBoxLineFromBottom() - common.InputBoxHeight - 6
+		if m.sidebar.IsOpen && m.ctx.PreviewPosition == "top" {
+			y -= m.ctx.MainContentHeight + m.ctx.Styles.Sidebar.BorderWidth
+		}
 		layers = append(layers, lipgloss.NewLayer(prCmp).X(previewPos.X+3).Y(y))
 	}
 
 	issueCmp := m.issueSidebar.ViewCompletions()
 	if issueCmp != "" {
 		y := m.ctx.ScreenHeight - common.FooterHeight - m.issueSidebar.InputBoxLineFromButton() - common.InputBoxHeight - 6
+		if m.sidebar.IsOpen && m.ctx.PreviewPosition == "top" {
+			y -= m.ctx.MainContentHeight + m.ctx.Styles.Sidebar.BorderWidth
+		}
 		layers = append(layers, lipgloss.NewLayer(issueCmp).X(previewPos.X+3).Y(y))
 	}
 
@@ -1294,7 +1345,7 @@ func (m *Model) resolvePreviewPosition() string {
 		return m.positionOverride
 	}
 
-	if pos == "right" || pos == "bottom" {
+	if pos == "right" || pos == "bottom" || pos == "top" {
 		return pos
 	}
 
@@ -1335,17 +1386,21 @@ func (m *Model) syncMainContentDimensions() {
 
 	m.ctx.SidebarOpen = true
 
-	if m.ctx.PreviewPosition == "bottom" {
+	if m.ctx.PreviewPosition == "bottom" || m.ctx.PreviewPosition == "top" {
 		m.ctx.MainContentWidth = m.ctx.ScreenWidth
 
 		// Subtract border height: lipgloss Height() sets content height,
 		// and BorderTop adds an extra row outside of that.
-		availableHeight := m.getBaseContentHeight() - m.ctx.Styles.Sidebar.BorderWidth
+		availableHeight := max(0, m.getBaseContentHeight()-m.ctx.Styles.Sidebar.BorderWidth)
 		h := m.ctx.Config.Defaults.Preview.Height
 		if h > 0 && h < 1 {
 			h *= float64(availableHeight)
 		}
-		m.ctx.DynamicPreviewHeight = min(int(h), availableHeight)
+		limit := availableHeight
+		if m.ctx.PreviewPosition == "top" {
+			limit = max(0, availableHeight-common.SearchHeight-common.TableHeaderHeight-2)
+		}
+		m.ctx.DynamicPreviewHeight = max(0, min(int(h), limit))
 		m.ctx.MainContentHeight = availableHeight - m.ctx.DynamicPreviewHeight
 		m.ctx.DynamicPreviewWidth = m.ctx.ScreenWidth
 	} else {
@@ -2070,4 +2125,9 @@ func (m *Model) isViewSectionsStale() bool {
 		}
 	}
 	return false
+}
+
+func (m *Model) mouseNavigationBlocked() bool {
+	s := m.getCurrSection()
+	return s == nil || s.GetIsLoading() || s.IsSearchFocused() || s.IsPromptConfirmationFocused() || m.prView.IsTextInputBoxFocused() || m.issueSidebar.IsTextInputBoxFocused()
 }

@@ -134,7 +134,7 @@ This setting defines how many notifications the dashboard should fetch when:
 
 These settings define how the preview pane displays in the dashboard. You can specify
 whether the preview pane is open by default, its width (for right position), its height
-(for bottom position), and its position relative to the main content.
+(for top or bottom position), and its position relative to the main content.
 
 #### Open on Load (`open`)
 
@@ -166,7 +166,7 @@ By default, the preview pane is 45% wide.
 | :----- | :-----: | :-----: |
 | Number |    0    |  0.60   |
 
-Specifies the height of the preview pane when it appears below the main content (in bottom
+Specifies the height of the preview pane when it appears above or below the main content (in top or bottom
 position mode). You can set the size to a percentage of the terminal height by using
 fractions (e.g. 0.4 would be 40%). Values greater than 1 specify a fixed number of rows.
 
@@ -176,18 +176,22 @@ By default, the preview pane height is 40%.
 
 | Type   |        Options         | Default |
 | :----- | :--------------------: | :-----: |
-| String | `right`, `bottom`, `auto` | `auto`  |
+| String | `right`, `bottom`, `top`, `auto` | `auto`  |
 
 Specifies where the preview pane appears relative to the main content.
 
 - `right` — the preview pane appears to the right of the main content (vertical split).
 - `bottom` — the preview pane appears below the main content (horizontal split).
+- `top` — the preview pane appears above the search and results.
 - `auto` — automatically chooses `right` when the terminal is wide enough, and switches
   to `bottom` when the main content would have fewer than 80 columns.
 
 You can toggle the position at runtime with the <kbd>P</kbd> key.
 
 By default, the position is `auto`.
+
+The mouse wheel scrolls the pane under the pointer. Click a result row to select it.
+Mouse selection pauses while search, confirmation, or comment inputs are focused.
 
 ### Refetch Interval in Minutes (`refetchIntervalMinutes`)
 

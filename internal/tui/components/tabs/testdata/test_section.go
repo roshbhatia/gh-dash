@@ -195,3 +195,5 @@ func (t *TestSection) View() string {
 func (t *TestSection) ViewCompletions() string {
 	panic("unimplemented")
 }
+
+func (s *TestSection) SelectVisibleRow(y int) bool { return false }

@@ -55,12 +55,16 @@ func (m Model) View() string {
 		return ""
 	}
 
-	if m.ctx.PreviewPosition == "bottom" {
+	if m.ctx.PreviewPosition == "bottom" || m.ctx.PreviewPosition == "top" {
 		height := m.ctx.DynamicPreviewHeight
 		width := m.ctx.DynamicPreviewWidth
 		style := m.ctx.Styles.Sidebar.BottomRoot.
 			Height(height).
 			Width(width)
+
+		if m.ctx.PreviewPosition == "top" {
+			style = style.BorderTop(false).BorderBottom(true)
+		}
 
 		if m.data == "" {
 			return style.Align(lipgloss.Center).Render(
@@ -105,7 +109,7 @@ func (m *Model) GetSidebarContentWidth() int {
 	if m.ctx == nil || m.ctx.Config == nil {
 		return 0
 	}
-	if m.ctx.PreviewPosition == "bottom" {
+	if m.ctx.PreviewPosition == "bottom" || m.ctx.PreviewPosition == "top" {
 		return max(0, m.ctx.DynamicPreviewWidth)
 	}
 	return max(0, m.ctx.DynamicPreviewWidth-m.ctx.Styles.Sidebar.BorderWidth)
@@ -134,10 +138,14 @@ func (m *Model) UpdateProgramContext(ctx *context.ProgramContext) {
 		return
 	}
 	m.ctx = ctx
-	if m.ctx.PreviewPosition == "bottom" {
-		m.viewport.SetHeight(m.ctx.DynamicPreviewHeight - m.ctx.Styles.Sidebar.PagerHeight)
+	if m.ctx.PreviewPosition == "bottom" || m.ctx.PreviewPosition == "top" {
+		m.viewport.SetHeight(max(0, m.ctx.DynamicPreviewHeight-m.ctx.Styles.Sidebar.PagerHeight))
 	} else {
 		m.viewport.SetHeight(m.ctx.MainContentHeight - m.ctx.Styles.Sidebar.PagerHeight)
 	}
 	m.viewport.SetWidth(m.GetSidebarContentWidth())
+}
+
+func (m *Model) ScrollLines(lines int) {
+	m.viewport.SetYOffset(m.viewport.YOffset() + lines)
 }
