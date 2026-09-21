@@ -25,6 +25,7 @@ import (
 	gitm "github.com/aymanbagabas/git-module"
 	"github.com/dlvhdr/gh-dash/v4/internal/config"
 	"github.com/dlvhdr/gh-dash/v4/internal/git"
+	"github.com/dlvhdr/gh-dash/v4/internal/prref"
 	"github.com/dlvhdr/gh-dash/v4/internal/tui"
 	"github.com/dlvhdr/gh-dash/v4/internal/tui/constants"
 	dctx "github.com/dlvhdr/gh-dash/v4/internal/tui/context"
@@ -43,7 +44,7 @@ var (
 	logo = lipgloss.NewStyle().Foreground(dctx.LogoColor).MarginBottom(1).SetString(constants.Logo)
 
 	rootCmd = &cobra.Command{
-		Use: "gh dash",
+		Use: "gh dash [pull request]",
 		Long: lipgloss.JoinVertical(
 			lipgloss.Left,
 			logo.Render(),
@@ -61,6 +62,12 @@ var (
 #   - Use the global configuration file
 #   - Use a local .gh-dash.yml file if in a git repo
 gh dash
+
+# Open a pull request directly, e.g. from a link someone sent you
+gh dash https://github.com/dlvhdr/gh-dash/pull/767
+gh dash dlvhdr/gh-dash#767
+# Inside a clone of the repo, a bare number works too
+gh dash 767
 
 # Run with a specific configuration file
 gh dash --config /path/to/configuration/file.yml
@@ -237,11 +244,26 @@ func init() {
 			log.Warn("did not find github repo at current path")
 		}
 
+		var opts []tui.Option
+		if len(args) == 1 {
+			ref, err := prref.Parse(args[0], &ghRepo)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				os.Exit(1)
+			}
+			log.Info("opening pull request from argument", "pr", ref.String(), "url", ref.URL())
+			opts = append(opts, tui.WithInitialPR(tui.InitialPR{
+				Title: ref.String(),
+				Url:   ref.URL(),
+			}))
+		}
+
 		zone.NewGlobal()
 
 		model := tui.NewModel(
 			config.Location{RepoPath: gitRepoPath, ConfigFlag: cfgFlag},
 			tui.Repositories{GitRepo: gitRepo, GHRepo: &ghRepo},
+			opts...,
 		)
 
 		cpuprofile, err := rootCmd.Flags().GetString("cpuprofile")
