@@ -69,6 +69,27 @@ type Model struct {
 	tasks            map[string]context.Task
 	positionOverride string // "" means no override, "right" or "bottom"
 	mode             Mode
+	// initialPr, when set, opens this PR in a pinned section on startup.
+	initialPr *InitialPR
+}
+
+// InitialPR describes a pull request to open as soon as the dashboard starts.
+type InitialPR struct {
+	// Title is shown on the section tab, e.g. "owner/repo#123".
+	Title string
+	// Url is the PR's HTML URL, used to fetch it.
+	Url string
+}
+
+// Option configures the root Model.
+type Option func(*Model)
+
+// WithInitialPR opens the given pull request in its own section, with the
+// preview pane open, when the dashboard starts.
+func WithInitialPR(pr InitialPR) Option {
+	return func(m *Model) {
+		m.initialPr = &pr
+	}
 }
 
 type Mode int
@@ -83,13 +104,16 @@ type Repositories struct {
 	GitRepo *gitm.Repository
 }
 
-func NewModel(location config.Location, repos Repositories) Model {
+func NewModel(location config.Location, repos Repositories, opts ...Option) Model {
 	taskSpinner := spinner.Model{Spinner: spinner.Dot}
 	m := Model{
 		keys:        keys.Keys,
 		sidebar:     sidebar.NewModel(),
 		taskSpinner: taskSpinner,
 		tasks:       map[string]context.Task{},
+	}
+	for _, opt := range opts {
+		opt(&m)
 	}
 
 	version := "dev"
@@ -707,12 +731,21 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.ctx.View = m.ctx.Config.Defaults.View
 		m.currSectionId = 0
 		m.sidebar.IsOpen = msg.Config.Defaults.Preview.Open
+		if m.initialPr != nil {
+			// A PR was passed on the command line: land on the PRs view with
+			// the preview open so the PR is visible immediately.
+			m.ctx.View = config.PRsView
+			m.sidebar.IsOpen = true
+		}
 		m.syncMainContentDimensions()
 
 		m.initSections()
+		if m.initialPr != nil {
+			m.currSectionId = m.addPinnedPrSection(*m.initialPr)
+		}
 		fetchSectionsCmds := m.fetchAllViewSections()
 		m.updateTabs()
-		m.tabs.SetCurrSectionId(0)
+		m.tabs.SetCurrSectionId(m.currSectionId)
 
 		if m.ctx.BackgroundSource != "bubbletea" {
 			log.Debugf("Setting markdownStyle in initMsg")
@@ -1902,6 +1935,15 @@ func (m *Model) addNewSection() {
 	}
 	m.updateTabs()
 	m.setCurrSectionId(sid)
+}
+
+// addPinnedPrSection appends a section pinned to a single PR to the PRs view
+// and returns its id. Like scratch sections it can be closed with the
+// remove-section key.
+func (m *Model) addPinnedPrSection(pr InitialPR) int {
+	sid := len(m.prs)
+	m.prs = append(m.prs, new(prssection.NewPinnedPrModel(sid, m.ctx, pr.Title, pr.Url)))
+	return sid
 }
 
 func (m *Model) removeSection() {

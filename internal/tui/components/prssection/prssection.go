@@ -27,6 +27,39 @@ type Model struct {
 	section.BaseModel
 	Prs []prrow.Data
 	cfg config.PrsSectionConfig
+	// pinnedPrUrl, when set, makes the section show exactly one PR fetched by
+	// URL instead of running a search. Editing the search value unpins it.
+	pinnedPrUrl string
+}
+
+// NewPinnedPrModel creates a section that shows a single pull request,
+// identified by its URL, instead of a search result. Used when gh-dash is
+// launched with a PR reference (e.g. `gh dash https://github.com/o/r/pull/1`).
+func NewPinnedPrModel(
+	id int,
+	ctx *context.ProgramContext,
+	title string,
+	prUrl string,
+) Model {
+	m := NewModel(
+		id,
+		ctx,
+		config.PrsSectionConfig{Title: title, Filters: prUrl},
+		time.Now(),
+		time.Now(),
+	)
+	// NewModel may prepend the current repo filter at launch; the pinned
+	// section is identified by the URL alone.
+	m.pinnedPrUrl = prUrl
+	m.SearchValue = prUrl
+	m.SearchBar.SetValue(prUrl)
+	m.IsFilteredByCurrentRemote = false
+	return m
+}
+
+// IsPinned reports whether the section is pinned to a single PR URL.
+func (m *Model) IsPinned() bool {
+	return m.pinnedPrUrl != ""
 }
 
 func NewModel(
@@ -72,6 +105,10 @@ func (m *Model) Update(msg tea.Msg) (section.Section, tea.Cmd) {
 
 			case "enter":
 				m.SearchValue = m.SearchBar.Value()
+				if m.pinnedPrUrl != "" && m.SearchValue != m.pinnedPrUrl {
+					// The user replaced the pinned URL with a search query.
+					m.pinnedPrUrl = ""
+				}
 				m.SyncSmartFilterWithSearchValue()
 				m.SetIsSearching(false)
 				m.ResetRows()
@@ -479,6 +516,11 @@ func (m *Model) FetchNextPageSectionRows() []tea.Cmd {
 	startCmd := m.Ctx.StartTask(task)
 	cmds = append(cmds, startCmd)
 
+	if m.pinnedPrUrl != "" {
+		cmds = append(cmds, m.fetchPinnedPr(taskId), m.SetIsLoading(true))
+		return cmds
+	}
+
 	fetchCmd := func() tea.Msg {
 		limit := m.Config.Limit
 		if limit == nil {
@@ -516,6 +558,48 @@ func (m *Model) FetchNextPageSectionRows() []tea.Cmd {
 	cmds = append(cmds, m.SetIsLoading(true))
 
 	return cmds
+}
+
+// fetchPinnedPr fetches the single pinned PR by URL. The row is returned
+// already enriched, so the sidebar can render it without a second request.
+func (m *Model) fetchPinnedPr(taskId string) tea.Cmd {
+	prUrl := m.pinnedPrUrl
+	return func() tea.Msg {
+		enriched, err := data.FetchPullRequest(prUrl)
+		if err != nil {
+			return constants.TaskFinishedMsg{
+				SectionId:   m.Id,
+				SectionType: m.Type,
+				TaskId:      taskId,
+				Err:         err,
+			}
+		}
+		if enriched.Url == "" {
+			return constants.TaskFinishedMsg{
+				SectionId:   m.Id,
+				SectionType: m.Type,
+				TaskId:      taskId,
+				Err:         fmt.Errorf("no pull request found at %s", prUrl),
+			}
+		}
+
+		primary := enriched.ToPullRequestData()
+		return constants.TaskFinishedMsg{
+			SectionId:   m.Id,
+			SectionType: m.Type,
+			TaskId:      taskId,
+			Msg: SectionPullRequestsFetchedMsg{
+				Prs: []prrow.Data{{
+					Primary:    &primary,
+					Enriched:   enriched,
+					IsEnriched: true,
+				}},
+				TotalCount: 1,
+				PageInfo:   data.PageInfo{HasNextPage: false},
+				TaskId:     taskId,
+			},
+		}
+	}
 }
 
 func (m *Model) ResetRows() {

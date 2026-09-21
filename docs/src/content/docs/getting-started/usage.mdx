@@ -29,6 +29,32 @@ To use `dash`, follow these steps after you've [installed it][01]:
      -h, --help            help for Dash
    ```
 
+## Opening a pull request directly
+
+When someone sends you a link to a pull request, pass it to `dash` to open it straight away:
+
+```bash
+gh dash https://github.com/dlvhdr/gh-dash/pull/767
+```
+
+`dash` starts on the PRs view with the preview pane open on that PR, in a
+temporary section named after it (for example `dlvhdr/gh-dash#767`). All the
+usual PR keybindings work there: approve, comment, diff, checkout, and so on.
+Press <kbd>x</kbd> on the section to close it, or <kbd>/</kbd> to turn it into
+a regular search section.
+
+The following forms are accepted:
+
+| Form                                            | Example                                       |
+| :---------------------------------------------- | :-------------------------------------------- |
+| Full URL (any host, including GitHub Enterprise) | `https://github.com/dlvhdr/gh-dash/pull/767` |
+| URL without the scheme                          | `github.com/dlvhdr/gh-dash/pull/767`          |
+| `owner/repo#number`                             | `dlvhdr/gh-dash#767`                          |
+| `#number` or `number` (inside a clone of the repo) | `767`                                      |
+
+Extra path segments, query strings, and fragments copied from the browser
+(such as `/files` or `?notification_referrer_id=...`) are ignored.
+
 ## Flags
 
 ### `--config`
