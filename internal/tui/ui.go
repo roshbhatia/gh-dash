@@ -460,6 +460,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				cmds = append(cmds, m.openBrowser())
 
 			case key.Matches(msg, keys.PRKeys.Approve):
+				if m.ctx.Config.Defaults.PrQuickApprove {
+					return m, m.quickApprovePR(currSection, currRowData)
+				}
 				return m, m.openSidebarForPRInput(m.prView.SetIsApproving)
 
 			case key.Matches(msg, keys.PRKeys.Assign):
@@ -580,6 +583,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if action != nil {
 						switch action.Type {
 						case prview.PRActionApprove:
+							if m.ctx.Config.Defaults.PrQuickApprove {
+								return m, m.quickApproveNotificationPR()
+							}
 							return m, m.openSidebarForPRInput(m.prView.SetIsApproving)
 
 						case prview.PRActionAssign:
@@ -792,6 +798,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			scmd := m.updateSection(msg.SectionId, msg.SectionType, msg.Msg)
 			cmds = append(cmds, scmd)
 
+			if upd, ok := msg.Msg.(tasks.UpdatePRMsg); ok && msg.Err == nil {
+				// An action changed the PR on GitHub; re-fetch it so the row
+				// and sidebar show the real state instead of a local guess.
+				cmds = append(cmds, m.refetchPR(msg.SectionId, msg.SectionType, upd.PrNumber))
+			}
+
 			syncCmd := m.syncSidebar()
 			cmds = append(cmds, syncCmd)
 		}
@@ -799,12 +811,34 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case prview.EnrichedPrMsg:
 		if msg.Err == nil {
 			m.prView.SetEnrichedPR(msg.Data)
-			m.prs[msg.Id].(*prssection.Model).EnrichPR(msg.Data)
+			if msg.Id >= 0 && msg.Id < len(m.prs) {
+				m.prs[msg.Id].(*prssection.Model).EnrichPR(msg.Data)
+			}
 			syncCmd := m.syncSidebar()
 			cmds = append(cmds, syncCmd)
 		} else {
 			log.Error("failed enriching pr", "err", msg.Err)
 		}
+
+	case prRefetchedMsg:
+		if msg.Err != nil {
+			log.Error("failed re-fetching pr after action", "err", msg.Err)
+			break
+		}
+		if msg.SectionId >= 0 && msg.SectionId < len(m.prs) {
+			if s, ok := m.prs[msg.SectionId].(*prssection.Model); ok {
+				s.RefreshPR(msg.Data)
+			}
+		}
+		if pr := m.notificationView.GetSubjectPR(); pr != nil && pr.Primary != nil &&
+			pr.Primary.Url == msg.Data.Url {
+			fresh := msg.Data.ToPullRequestData()
+			pr.Primary = &fresh
+			pr.Enriched = msg.Data
+			pr.IsEnriched = true
+		}
+		m.prView.SetEnrichedPR(msg.Data)
+		cmds = append(cmds, m.syncSidebar())
 
 	case notificationPRFetchedMsg:
 		if msg.Err == nil {
@@ -1090,6 +1124,81 @@ type notificationIssueFetchedMsg struct {
 	Issue            data.IssueData
 	LatestCommentUrl string
 	Err              error
+}
+
+// prRefetchedMsg carries a PR re-fetched from GitHub after an action on it.
+type prRefetchedMsg struct {
+	SectionId int
+	Data      data.EnrichedPullRequestData
+	Err       error
+}
+
+// refetchPR re-fetches the PR a finished action targeted. For PR sections the
+// URL is looked up in the section; for a PR viewed from a notification the
+// notification subject is used.
+func (m *Model) refetchPR(sectionId int, sectionType string, prNumber int) tea.Cmd {
+	var prUrl string
+	switch sectionType {
+	case prssection.SectionType:
+		if sectionId < 0 || sectionId >= len(m.prs) {
+			return nil
+		}
+		s, ok := m.prs[sectionId].(*prssection.Model)
+		if !ok {
+			return nil
+		}
+		prUrl, ok = s.PrUrlByNumber(prNumber)
+		if !ok {
+			return nil
+		}
+	case notificationssection.SectionType:
+		pr := m.notificationView.GetSubjectPR()
+		if pr == nil || pr.Primary == nil || pr.Primary.Number != prNumber {
+			return nil
+		}
+		prUrl = pr.Primary.Url
+		sectionId = -1
+	default:
+		return nil
+	}
+	if prUrl == "" {
+		return nil
+	}
+
+	return func() tea.Msg {
+		enriched, err := data.FetchPullRequest(prUrl)
+		return prRefetchedMsg{SectionId: sectionId, Data: enriched, Err: err}
+	}
+}
+
+// quickApprovePR approves the selected PR with defaults.prApproveComment
+// without opening the comment prompt. With defaults.prQuickApproveAdvance
+// the cursor moves to the next row so the next PR can be reviewed.
+func (m *Model) quickApprovePR(currSection section.Section, currRowData data.RowData) tea.Cmd {
+	pr, ok := currRowData.(*prrow.Data)
+	if !ok || pr == nil || pr.Primary == nil || currSection == nil {
+		return nil
+	}
+	sid := tasks.SectionIdentifier{Id: currSection.GetId(), Type: prssection.SectionType}
+	approveCmd := tasks.ApprovePR(m.ctx, sid, pr.Primary, m.ctx.Config.Defaults.PrApproveComment)
+
+	if m.ctx.Config.Defaults.PrQuickApproveAdvance &&
+		currSection.CurrRow() < currSection.NumRows()-1 {
+		currSection.NextRow()
+		return tea.Batch(approveCmd, m.onViewedRowChanged())
+	}
+	return approveCmd
+}
+
+// quickApproveNotificationPR is quickApprovePR for a PR opened from the
+// notifications view.
+func (m *Model) quickApproveNotificationPR() tea.Cmd {
+	pr := m.notificationView.GetSubjectPR()
+	if pr == nil || pr.Primary == nil {
+		return nil
+	}
+	sid := tasks.SectionIdentifier{Id: m.currSectionId, Type: notificationssection.SectionType}
+	return tasks.ApprovePR(m.ctx, sid, pr.Primary, m.ctx.Config.Defaults.PrApproveComment)
 }
 
 func (m *Model) setCurrSectionId(newSectionId int) {
