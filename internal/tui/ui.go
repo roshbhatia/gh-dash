@@ -801,7 +801,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if upd, ok := msg.Msg.(tasks.UpdatePRMsg); ok && msg.Err == nil {
 				// An action changed the PR on GitHub; re-fetch it so the row
 				// and sidebar show the real state instead of a local guess.
-				cmds = append(cmds, m.refetchPR(msg.SectionId, msg.SectionType, upd.PrNumber))
+				cmds = append(cmds, m.refetchPR(msg.SectionId, msg.SectionType, upd.PrURL))
 			}
 
 			syncCmd := m.syncSidebar()
@@ -1133,38 +1133,14 @@ type prRefetchedMsg struct {
 	Err       error
 }
 
-// refetchPR re-fetches the PR a finished action targeted. For PR sections the
-// URL is looked up in the section; for a PR viewed from a notification the
-// notification subject is used.
-func (m *Model) refetchPR(sectionId int, sectionType string, prNumber int) tea.Cmd {
-	var prUrl string
-	switch sectionType {
-	case prssection.SectionType:
-		if sectionId < 0 || sectionId >= len(m.prs) {
-			return nil
-		}
-		s, ok := m.prs[sectionId].(*prssection.Model)
-		if !ok {
-			return nil
-		}
-		prUrl, ok = s.PrUrlByNumber(prNumber)
-		if !ok {
-			return nil
-		}
-	case notificationssection.SectionType:
-		pr := m.notificationView.GetSubjectPR()
-		if pr == nil || pr.Primary == nil || pr.Primary.Number != prNumber {
-			return nil
-		}
-		prUrl = pr.Primary.Url
-		sectionId = -1
-	default:
-		return nil
-	}
+// refetchPR uses the URL captured by the action, even after selection changes.
+func (m *Model) refetchPR(sectionId int, sectionType string, prUrl string) tea.Cmd {
 	if prUrl == "" {
 		return nil
 	}
-
+	if sectionType == notificationssection.SectionType {
+		sectionId = -1
+	}
 	return func() tea.Msg {
 		enriched, err := data.FetchPullRequest(prUrl)
 		return prRefetchedMsg{SectionId: sectionId, Data: enriched, Err: err}

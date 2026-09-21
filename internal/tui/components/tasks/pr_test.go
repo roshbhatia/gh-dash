@@ -15,6 +15,7 @@ func TestUpdatePR_TaskConfiguration(t *testing.T) {
 	pr := mockIssue{
 		number:   42,
 		repoName: "owner/repo",
+		url:      "https://github.com/owner/repo/pull/42",
 	}
 
 	task := updatePRTask(section, pr)
@@ -30,6 +31,7 @@ func TestUpdatePR_MsgDoesNotMarkPRClosed(t *testing.T) {
 	task := updatePRTask(SectionIdentifier{Id: 2, Type: "pr"}, mockIssue{
 		number:   42,
 		repoName: "owner/repo",
+		url:      "https://github.com/owner/repo/pull/42",
 	})
 
 	msg := task.Msg(nil, nil)
@@ -37,6 +39,7 @@ func TestUpdatePR_MsgDoesNotMarkPRClosed(t *testing.T) {
 
 	require.True(t, ok, "Msg should return UpdatePRMsg")
 	require.Equal(t, 42, updateMsg.PrNumber)
+	require.Equal(t, "https://github.com/owner/repo/pull/42", updateMsg.PrURL)
 	require.Nil(
 		t,
 		updateMsg.IsClosed,
@@ -57,6 +60,7 @@ func TestApproveWorkflows_TaskConfiguration(t *testing.T) {
 	pr := mockIssue{
 		number:   42,
 		repoName: "owner/repo",
+		url:      "https://github.com/owner/repo/pull/42",
 	}
 
 	_ = ApproveWorkflows(ctx, section, pr)

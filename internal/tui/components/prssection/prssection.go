@@ -196,7 +196,7 @@ func (m *Model) Update(msg tea.Msg) (section.Section, tea.Cmd) {
 
 	case tasks.UpdatePRMsg:
 		for i, currPr := range m.Prs {
-			if currPr.Primary.Number != msg.PrNumber {
+			if currPr.Primary == nil || currPr.Primary.Number != msg.PrNumber || (msg.PrURL != "" && currPr.Primary.Url != msg.PrURL) {
 				continue
 			}
 
@@ -313,16 +313,6 @@ func (m *Model) RefreshPR(enriched data.EnrichedPullRequestData) bool {
 		m.Table.SetRows(m.BuildRows())
 	}
 	return updated
-}
-
-// PrUrlByNumber returns the URL of the first row with the given PR number.
-func (m *Model) PrUrlByNumber(number int) (string, bool) {
-	for _, pr := range m.Prs {
-		if pr.Primary != nil && pr.Primary.Number == number {
-			return pr.Primary.Url, true
-		}
-	}
-	return "", false
 }
 
 func GetSectionColumns(

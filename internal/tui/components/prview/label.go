@@ -74,6 +74,7 @@ func (m *Model) label(labels []string) tea.Cmd {
 			Err:         err,
 			Msg: tasks.UpdatePRMsg{
 				PrNumber: prNumber,
+				PrURL:    pr.GetUrl(),
 				Labels:   &returnedLabels,
 			},
 		}

@@ -21,6 +21,7 @@ type SectionIdentifier struct {
 }
 
 type UpdatePRMsg struct {
+	PrURL            string
 	PrNumber         int
 	IsClosed         *bool
 	NewComment       *data.Comment
@@ -112,6 +113,7 @@ func ReopenPR(ctx *context.ProgramContext, section SectionIdentifier, pr data.Ro
 		Msg: func(c *exec.Cmd, err error) tea.Msg {
 			return UpdatePRMsg{
 				PrNumber: prNumber,
+				PrURL:    pr.GetUrl(),
 				IsClosed: utils.BoolPtr(false),
 			}
 		},
@@ -135,6 +137,7 @@ func ClosePR(ctx *context.ProgramContext, section SectionIdentifier, pr data.Row
 		Msg: func(c *exec.Cmd, err error) tea.Msg {
 			return UpdatePRMsg{
 				PrNumber: prNumber,
+				PrURL:    pr.GetUrl(),
 				IsClosed: utils.BoolPtr(true),
 			}
 		},
@@ -158,6 +161,7 @@ func PRReady(ctx *context.ProgramContext, section SectionIdentifier, pr data.Row
 		Msg: func(c *exec.Cmd, err error) tea.Msg {
 			return UpdatePRMsg{
 				PrNumber:       prNumber,
+				PrURL:          pr.GetUrl(),
 				ReadyForReview: utils.BoolPtr(true),
 			}
 		},
@@ -195,6 +199,7 @@ func MergePR(ctx *context.ProgramContext, section SectionIdentifier, pr data.Row
 			Err:         err,
 			Msg: UpdatePRMsg{
 				PrNumber: prNumber,
+				PrURL:    pr.GetUrl(),
 				IsMerged: &isMerged,
 			},
 		}
@@ -257,6 +262,7 @@ func updatePRTask(section SectionIdentifier, pr data.RowData) GitHubTask {
 		Msg: func(c *exec.Cmd, err error) tea.Msg {
 			return UpdatePRMsg{
 				PrNumber: prNumber,
+				PrURL:    pr.GetUrl(),
 			}
 		},
 	}
@@ -299,6 +305,7 @@ func AssignPR(
 			}
 			return UpdatePRMsg{
 				PrNumber:       prNumber,
+				PrURL:          pr.GetUrl(),
 				AddedAssignees: &returnedAssignees,
 			}
 		},
@@ -338,6 +345,7 @@ func UnassignPR(
 			}
 			return UpdatePRMsg{
 				PrNumber:         prNumber,
+				PrURL:            pr.GetUrl(),
 				RemovedAssignees: &returnedAssignees,
 			}
 		},
@@ -368,6 +376,7 @@ func CommentOnPR(
 		Msg: func(c *exec.Cmd, err error) tea.Msg {
 			return UpdatePRMsg{
 				PrNumber: prNumber,
+				PrURL:    pr.GetUrl(),
 				NewComment: &data.Comment{
 					Author:    struct{ Login string }{Login: ctx.User},
 					Body:      body,
@@ -405,6 +414,7 @@ func ApprovePR(
 		Msg: func(c *exec.Cmd, err error) tea.Msg {
 			return UpdatePRMsg{
 				PrNumber: prNumber,
+				PrURL:    pr.GetUrl(),
 			}
 		},
 	})
@@ -439,7 +449,7 @@ func ApproveWorkflows(
 				SectionId:   section.Id,
 				SectionType: section.Type,
 				Err:         fmt.Errorf("failed to get head SHA: %w", err),
-				Msg:         UpdatePRMsg{PrNumber: prNumber},
+				Msg:         UpdatePRMsg{PrNumber: prNumber, PrURL: pr.GetUrl()},
 			}
 		}
 		sha := strings.TrimSpace(string(shaOut))
@@ -455,7 +465,7 @@ func ApproveWorkflows(
 				SectionId:   section.Id,
 				SectionType: section.Type,
 				Err:         fmt.Errorf("failed to get workflow runs: %w", err),
-				Msg:         UpdatePRMsg{PrNumber: prNumber},
+				Msg:         UpdatePRMsg{PrNumber: prNumber, PrURL: pr.GetUrl()},
 			}
 		}
 
@@ -466,7 +476,7 @@ func ApproveWorkflows(
 				SectionId:   section.Id,
 				SectionType: section.Type,
 				Err:         fmt.Errorf("no workflows awaiting approval"),
-				Msg:         UpdatePRMsg{PrNumber: prNumber},
+				Msg:         UpdatePRMsg{PrNumber: prNumber, PrURL: pr.GetUrl()},
 			}
 		}
 
@@ -497,7 +507,7 @@ func ApproveWorkflows(
 			SectionId:   section.Id,
 			SectionType: section.Type,
 			Err:         lastErr,
-			Msg:         UpdatePRMsg{PrNumber: prNumber},
+			Msg:         UpdatePRMsg{PrNumber: prNumber, PrURL: pr.GetUrl()},
 		}
 	})
 }

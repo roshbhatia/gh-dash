@@ -84,6 +84,7 @@ func (m *Model) watchChecks() tea.Cmd {
 			Err:         err,
 			Msg: tasks.UpdatePRMsg{
 				PrNumber: prNumber,
+				PrURL:    pr.GetUrl(),
 			},
 		}
 	})

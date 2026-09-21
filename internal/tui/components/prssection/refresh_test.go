@@ -9,6 +9,7 @@ import (
 
 	"github.com/dlvhdr/gh-dash/v4/internal/data"
 	"github.com/dlvhdr/gh-dash/v4/internal/tui/components/prrow"
+	"github.com/dlvhdr/gh-dash/v4/internal/tui/components/tasks"
 )
 
 func newRefreshTestModel(t *testing.T) Model {
@@ -84,12 +85,12 @@ func TestRefreshPR_NoMatchingRow(t *testing.T) {
 	require.Equal(t, "old title", m.Prs[1].Primary.Title)
 }
 
-func TestPrUrlByNumber(t *testing.T) {
+func TestUpdatePRDoesNotChangeSameNumberInAnotherRepository(t *testing.T) {
 	m := newRefreshTestModel(t)
-	url, ok := m.PrUrlByNumber(42)
-	require.True(t, ok)
-	require.Equal(t, "https://github.com/dlvhdr/gh-dash/pull/42", url)
-
-	_, ok = m.PrUrlByNumber(999)
-	require.False(t, ok)
+	m.Prs[0].Primary.Number = 42
+	m.Prs[0].Primary.State = "OPEN"
+	closed := true
+	_, _ = m.Update(tasks.UpdatePRMsg{PrNumber: 42, PrURL: m.Prs[1].Primary.Url, IsClosed: &closed})
+	require.Equal(t, "OPEN", m.Prs[0].Primary.State)
+	require.Equal(t, "CLOSED", m.Prs[1].Primary.State)
 }
